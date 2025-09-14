@@ -7,7 +7,7 @@ Program manipuluje kluczami rejestru aby przełączać bazę Płatnika. Wymaga r
 Skompiluj program z użyciem MinGW:
 
 ```
-g++ -std=c++17 platnik-switcher.cpp -o platnik-switcher.exe -mwindows
+g++ -s -Os -std=c++17 platnik-switcher.cpp -o platnik-switcher.exe -mwindows
 ```
 
 ## Użycie programu
