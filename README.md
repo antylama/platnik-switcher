@@ -2,6 +2,8 @@
 
 Program manipuluje kluczami rejestru aby przełączać bazę Płatnika. Wymaga restartu Płatnika.
 
+*Uwaga: Program nie wspiera autoryzacji systemu Windows i wspiera tylko Microsoft SQL Server w wersji 2012 i póżniejsze.*
+
 ## Budowa
 
 Skompiluj program z użyciem MinGW:
