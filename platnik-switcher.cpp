@@ -1,4 +1,4 @@
-// build mingw: g++ -std=c++17 platnik-switcher.cpp -o platnik-switcher.exe -ladvapi32 -lshell32
+// build mingw: g++ -s -Os -std=c++17 platnik-switcher.cpp -o platnik-switcher.exe -ladvapi32 -lshell32
 
 #include <iostream>
 #include <string>
@@ -599,3 +599,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
