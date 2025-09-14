@@ -1,5 +1,7 @@
 # Płatnik Switcher
 
+Program manipuluje kluczami rejestru aby przełączać bazę Płatnika. Wymaga restartu Płatnika.
+
 ## Budowa
 
 Skompiluj program z użyciem MinGW:
