@@ -5,87 +5,7 @@
 #include <vector>
 #include <sstream>
 #include <iomanip>
-
-// Define the minimum Windows version required for RegDeleteTreeW (Windows Vista)
-#undef _WIN32_WINNT
-#define _WIN32_WINNT 0x0600
 #include <windows.h>
-
-#include <shellapi.h> // For ShellExecuteExW
-
-/**
- * @brief Checks if the current process is running with administrator privileges.
- * @return True if running as admin, false otherwise.
- */
-bool IsRunningAsAdmin()
-{
-    BOOL isAdmin = FALSE;
-    PSID adminGroup = NULL;
-    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
-
-    // Create a Security Identifier (SID) for the Administrators group.
-    if (AllocateAndInitializeSid(
-            &ntAuthority,
-            2, // Count of subauthorities
-            SECURITY_BUILTIN_DOMAIN_RID,
-            DOMAIN_ALIAS_RID_ADMINS,
-            0, 0, 0, 0, 0, 0,
-            &adminGroup))
-    {
-
-        // Check if the current process's token is a member of the Administrators group.
-        if (!CheckTokenMembership(NULL, adminGroup, &isAdmin))
-        {
-            isAdmin = FALSE;
-        }
-        FreeSid(adminGroup);
-    }
-    return static_cast<bool>(isAdmin);
-}
-
-/**
- * @brief Re-launches the application with a request for admin privileges.
- * @param argc The original argument count.
- * @param argv The original argument values.
- */
-void ElevateNow(int argc, char *argv[])
-{
-    wchar_t szPath[MAX_PATH];
-    if (GetModuleFileNameW(NULL, szPath, ARRAYSIZE(szPath)))
-    {
-        // Reconstruct command line arguments as a wide string
-        std::wstring params = L"";
-        for (int i = 1; i < argc; ++i)
-        {
-            std::string arg = argv[i];
-            int size_needed = MultiByteToWideChar(CP_UTF8, 0, &arg[0], (int)arg.size(), NULL, 0);
-            std::wstring warg(size_needed, 0);
-            MultiByteToWideChar(CP_UTF8, 0, &arg[0], (int)arg.size(), &warg[0], size_needed);
-            params += L"\"" + warg + L"\" ";
-        }
-
-        SHELLEXECUTEINFOW sei = {sizeof(sei)};
-        sei.lpVerb = L"runas"; // The "magic" verb to trigger UAC
-        sei.lpFile = szPath;
-        sei.lpParameters = params.c_str();
-        sei.hwnd = NULL;
-        sei.nShow = SW_SHOWNORMAL;
-
-        if (!ShellExecuteExW(&sei))
-        {
-            DWORD error = GetLastError();
-            if (error == ERROR_CANCELLED)
-            {
-                // The user refused the UAC prompt
-                std::wcerr << L"User cancelled the UAC prompt." << std::endl;
-            }
-            else
-            {
-                std::wcerr << L"ShellExecuteExW failed with error code: " << error << std::endl;
-            }
-        }
-    }
-}
 
 // --- Płatnik Cipher Encryption Logic ---
 
@@ -258,6 +178,25 @@ void SetRegValue(HKEY hKey, const std::wstring &valueName, const std::wstring &d
 }
 
 /**
+ * @brief Deletes a value in a specific registry key.
+ */
+void DeleteRegValue(HKEY hKey, const std::wstring &valueName)
+{
+    LONG result = RegDeleteValueW(
+        hKey,
+        valueName.c_str());
+
+    if (result == ERROR_SUCCESS)
+    {
+        std::wcout << L"Pomyślnie usunięto wartość: " << valueName << std::endl;
+    }
+    else
+    {
+        std::wcerr << L"Błąd podczas usuwania wartości. Kod błędu: " << result << std::endl;
+    }
+}
+
+/**
  * @brief Gets a string value in a specific registry key.
  */
 std::wstring GetRegValue(HKEY hKey, const std::wstring &valueName)
@@ -423,15 +362,7 @@ int main(int argc, char *argv[])
     // in the MinGW console, you first need to set the console's output codepage.
     SetConsoleOutputCP(CP_UTF8);
 
-    if (!IsRunningAsAdmin())
-    {
-        std::cout << "Administrator privileges are required. Attempting to elevate..." << std::endl;
-        ElevateNow(argc, argv);
-        // The original, non-elevated process exits here.
-        return 0;
-    }
-
-    // Get password from command-line argument or use default.
+    // Redirect std::wcout to the console    // Get password from command-line argument or use default.
     std::string user_name = "Administrator";
     std::string plain_password;
     std::string data_source;
@@ -489,11 +420,6 @@ int main(int argc, char *argv[])
         initial_catalogue = WstringToUtf8(GetRegValue(hKey, L"Initial Catalog"));
         RegCloseKey(hKey);
 
-        // std::cout << "Data source: " << data_source << std::endl;
-        // std::cout << "Catalogue: " << initial_catalogue << std::endl;
-        // std::cout << "User name: " << user_name << std::endl;
-        // std::cout << "Password: " << decrypt(plain_password) << std::endl;
-
         message = L"Wywołano bez parametrów.\n\n";
         message += L"Użycie:\n";
         message += L"platnik-start.exe [plik.mdb|host,port] <katalog> [<użytkownik> <hasło>]\n\n";
@@ -519,45 +445,37 @@ int main(int argc, char *argv[])
         std::cout << "Encrypted:  " << encrypted_password_str << std::endl
                   << std::endl;
 
-        // Attempt to delete the key first to ensure a clean slate.
-        // RegDeleteTreeW recursively deletes a key and all its subkeys.
-        result = RegDeleteTreeW(HKEY_LOCAL_MACHINE, subKey);
-        if (result == ERROR_SUCCESS)
-        {
-            std::wcout << L"Key successfully deleted." << std::endl;
-        }
-        else if (result == ERROR_FILE_NOT_FOUND)
-        {
-            std::wcout << L"Key did not exist, no action needed." << std::endl;
-        }
-        else
-        {
-            std::wcerr << L"Error deleting key. Code: " << result << std::endl;
-        }
-        std::wcout << std::endl;
-
-        // Create the key. RegCreateKeyExW will also open it if it exists.
-        result = RegCreateKeyExW(
+        // Open the registry key with write access.
+        result = RegOpenKeyExW(
             HKEY_LOCAL_MACHINE,
             subKey,
             0,
-            NULL,
-            REG_OPTION_NON_VOLATILE,
-            KEY_WRITE,
-            NULL,
-            &hKey,
-            NULL);
+            KEY_READ | KEY_WRITE | KEY_SET_VALUE,
+            &hKey);
 
         if (result != ERROR_SUCCESS)
         {
-            std::wcerr << L"Error creating or opening registry key. Code: " << result << std::endl;
-            return 1;
+            std::wcerr << L"Error opening registry key. Code: " << result << std::endl;
+            message = L"Nie udało się otworzyć klucza rejestru.\n\nZmień uprawnienia na \"Pełna kontrola\" dla klucza:\nHKEY_LOCAL_MACHINE\\";
+            message += std::wstring(subKey);
+            message += L"\n\nlub uruchom ponownie program jako administrator.";
+            argc = 0;
         }
-
         std::wcout << L"Successfully created/opened key: HKEY_LOCAL_MACHINE\\" << subKey << std::endl;
 
         if (argc == 3)
         {
+            DeleteRegValue(hKey, L"Provider");
+            DeleteRegValue(hKey, L"Data Source");
+            DeleteRegValue(hKey, L"Initial Catalog");
+            DeleteRegValue(hKey, L"Persist Security Info");
+            DeleteRegValue(hKey, L"User ID");
+            DeleteRegValue(hKey, L"Password");
+            DeleteRegValue(hKey, L"Use Procedure for Prepare");
+            DeleteRegValue(hKey, L"Auto Translate");
+            DeleteRegValue(hKey, L"Pocket Size");
+            DeleteRegValue(hKey, L"Workstation ID");
+
             SetRegValue(hKey, L"Provider", L"Microsoft.Jet.OLEDB.4.0");
             SetRegValue(hKey, L"Data Source", Utf8ToWstring(data_source));
             SetRegValue(hKey, L"Jet OLEDB:Database Password", encrypted_password_wstr);
@@ -566,7 +484,9 @@ int main(int argc, char *argv[])
         }
         else if (argc == 5)
         {
-            SetRegValue(hKey, L"Provider", L"Example.Provider.1.0");
+            DeleteRegValue(hKey, L"Jet OLEDB:Database Password");
+            DeleteRegValue(hKey, L"Mode");
+
             SetRegValue(hKey, L"Provider", L"MSOLEDBSQL");
             SetRegValue(hKey, L"Data Source", Utf8ToWstring(data_source));
             SetRegValue(hKey, L"Initial Catalog", initial_catalogue.empty() ? L"firma" : Utf8ToWstring(initial_catalogue));
@@ -599,4 +519,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
