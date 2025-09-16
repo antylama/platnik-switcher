@@ -29,3 +29,10 @@ lub (logowanie kontem Microsoft Windows - SSPI)
 ```platnik-start.exe LOCALHOST\\SQLEXPRESS BazaPlatnika```
 
 Wywołanie bez argumentów wyświetli pomoc i aktualne parametry bazy Płatnika.
+
+### Uprawnienia
+
+Zmień uprawnienia dostępu do klucza `Baza` z rejestru Płatnika jeśli to konieczne,
+ewentualnie uruchom program z uprawnieniami administratora (niezalecane).
+Uprawnienia powinny umożliwiać pełną kontrolę nad kluczem (`Pełna kontrola` dla 
+użytkownika z którego uprawnieniami uruchamiany jest program).
