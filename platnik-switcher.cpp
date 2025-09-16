@@ -370,28 +370,39 @@ int main(int argc, char *argv[])
     std::string mode = "ReadWrite";
 
     std::wstring message = L"Baza Płatnika przełączona.\n\n";
+    
+    if (argc > 1) {
+        data_source = AnsiArgToUtf8(argv[1]);
+    }
 
-    if (argc == 3)
+    bool is_mdb = data_source.find(".mdb") != std::string::npos;
+
+    if (argc == 3 && is_mdb)
     {
-        data_source = AnsiArgToUtf8(argv[1]);    // e.g. C:\Płatnik\Baza.mdb
         plain_password = AnsiArgToUtf8(argv[2]); // e.g. mojehaslo
         std::cout << "\nUsing database and password from command-line arguments." << std::endl;
         message = L"Przełączenie bazy na:\n\n";
         message += L"Żródło danych (plik bazy):\n" + Utf8ToWstring(data_source) + L"\n";
         message += L"Hasło: " + Utf8ToWstring(plain_password) + L"\n";
     }
-    else if (argc == 5)
+    else if (argc >= 3)
     {
-        data_source = AnsiArgToUtf8(argv[1]);       // e.g. localhost,1433
         initial_catalogue = AnsiArgToUtf8(argv[2]); // e.g. BazaPlatnika
-        user_name = AnsiArgToUtf8(argv[3]);         // e.g. Administrator
-        plain_password = AnsiArgToUtf8(argv[4]);    // e.g. mojehaslo
+        if (argc >= 5) {
+            user_name = AnsiArgToUtf8(argv[3]);         // e.g. Administrator
+            plain_password = AnsiArgToUtf8(argv[4]);    // e.g. mojehaslo
+        }
         std::cout << "\nUsing all parameters from command-line arguments." << std::endl;
         message = L"Przełączenie bazy na:\n\n";
         message += L"Żródło danych (host,port):\n\n" + Utf8ToWstring(data_source) + L"\n\n";
         message += L"Katalog: " + Utf8ToWstring(initial_catalogue) + L"\n\n";
-        message += L"Użytkownik: " + Utf8ToWstring(user_name) + L"\n\n";
-        message += L"Hasło: " + Utf8ToWstring(plain_password) + L"\n";
+        if (argc >= 5) {
+            message += L"Użytkownik: " + Utf8ToWstring(user_name) + L"\n\n";
+            message += L"Hasło: " + Utf8ToWstring(plain_password) + L"\n";
+        } else {
+            message += L"Użytkownik: (Integrated Security - SSPI)\n\n";
+            message += L"Hasło: (Integrated Security - SSPI)\n";
+        }
     }
     else
     {
@@ -463,7 +474,8 @@ int main(int argc, char *argv[])
         }
         std::wcout << L"Successfully created/opened key: HKEY_LOCAL_MACHINE\\" << subKey << std::endl;
 
-        if (argc == 3)
+        
+        if (argc == 3 && is_mdb)
         {
             DeleteRegValue(hKey, L"Provider");
             DeleteRegValue(hKey, L"Data Source");
@@ -475,6 +487,7 @@ int main(int argc, char *argv[])
             DeleteRegValue(hKey, L"Auto Translate");
             DeleteRegValue(hKey, L"Pocket Size");
             DeleteRegValue(hKey, L"Workstation ID");
+            DeleteRegValue(hKey, L"Integrated Security");
 
             SetRegValue(hKey, L"Provider", L"Microsoft.Jet.OLEDB.4.0");
             SetRegValue(hKey, L"Data Source", Utf8ToWstring(data_source));
@@ -482,17 +495,27 @@ int main(int argc, char *argv[])
             SetRegValue(hKey, L"Persist Security Info", L"False");
             SetRegValue(hKey, L"Mode", L"ReadWrite");
         }
-        else if (argc == 5)
+        else if (argc >= 3)
         {
             DeleteRegValue(hKey, L"Jet OLEDB:Database Password");
             DeleteRegValue(hKey, L"Mode");
+            DeleteRegValue(hKey, L"Password");
+            DeleteRegValue(hKey, L"Integrated Security");
 
             SetRegValue(hKey, L"Provider", L"MSOLEDBSQL");
             SetRegValue(hKey, L"Data Source", Utf8ToWstring(data_source));
             SetRegValue(hKey, L"Initial Catalog", initial_catalogue.empty() ? L"firma" : Utf8ToWstring(initial_catalogue));
-            SetRegValue(hKey, L"Persist Security Info", L"True");
-            SetRegValue(hKey, L"User ID", user_name.empty() ? L"Administrator" : Utf8ToWstring(user_name));
-            SetRegValue(hKey, L"Password", encrypted_password_wstr);
+
+            if (argc == 3)
+            {
+                SetRegValue(hKey, L"Integrated Security", L"SSPI");
+                SetRegValue(hKey, L"Persist Security Info", L"False");
+            } else {
+                SetRegValue(hKey, L"User ID", user_name.empty() ? L"Administrator" : Utf8ToWstring(user_name));
+                SetRegValue(hKey, L"Password", encrypted_password_wstr);
+                SetRegValue(hKey, L"Persist Security Info", L"True");
+            }
+            
             SetRegValue(hKey, L"Use Procedure for Prepare", L"1");
             SetRegValue(hKey, L"Auto Translate", L"True");
             SetRegValue(hKey, L"Pocket Size", L"4096");
