@@ -2,7 +2,7 @@
 
 Program manipuluje kluczami rejestru aby przełączać bazę Płatnika. Wymaga restartu Płatnika.
 
-*Uwaga: Program nie wspiera autoryzacji systemu Windows i wspiera tylko Microsoft SQL Server w wersji 2012 i póżniejsze.*
+*Uwaga: Wspiera tylko Microsoft SQL Server w wersji 2012 i póżniejsze.*
 
 ## Budowa
 
@@ -23,5 +23,9 @@ Przykład:
 lub
 
 ```platnik-start.exe localhost,1433 BazaPlatnika Administrator mojehaslo```
+
+lub (logowanie kontem Microsoft Windows - SSPI)
+
+```platnik-start.exe LOCALHOST\\SQLEXPRESS BazaPlatnika```
 
 Wywołanie bez argumentów wyświetli pomoc i aktualne parametry bazy Płatnika.
